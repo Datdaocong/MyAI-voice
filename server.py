@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from typing import Dict, List, Optional, Tuple
 from typing import Dict, List, Optional
 from urllib import error, request
 
@@ -13,6 +14,21 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 MAX_HISTORY_TURNS = int(os.getenv("MAX_HISTORY_TURNS", "8"))
 
+# OpenAI wrapper integration (from provided method)
+OPENAI_WRAPPER_URL = os.getenv("OPENAI_WRAPPER_URL", "https://sl-form-ai.ript.vn/api/v1/openai/chat")
+OPENAI_WRAPPER_ENABLED = os.getenv("OPENAI_WRAPPER_ENABLED", "1") == "1"
+
+# IMPORTANT:
+# - Keep prompt strictly ASCII to avoid Windows terminal/editor corruption.
+# - Build with explicit join(list) (no implicit adjacent-string concatenation).
+SYSTEM_PROMPT_LINES = [
+    "Ban la tro ly AI tieng Viet, tra loi linh hoat nhu cac LLM hien dai.",
+    "Uu tien giong dieu tu nhien, ro rang, co cau truc, di thang vao nhu cau nguoi dung.",
+    "Khi phu hop, dua vi du ngan hoac checklist de lam theo.",
+    "Neu cau hoi lien quan tuyen sinh/PTIT, hay nhac nguon chinh thuc: https://tuyensinh.ptit.edu.vn/.",
+    "Neu chua chac chan, hay noi ro muc do chac chan thay vi bia thong tin.",
+]
+SYSTEM_PROMPT = " ".join(SYSTEM_PROMPT_LINES)
 # Keep prompt ASCII-only to avoid any Windows encoding/editor corruption issues.
 SYSTEM_PROMPT = (
     "Ban la tro ly AI tieng Viet, tra loi linh hoat nhu cac LLM hien dai. "
@@ -79,6 +95,53 @@ def _build_contents(user_text: str, history: list[dict]) -> list[dict]:
     return contents
 
 
+def _build_wrapper_text(user_text: str, history: Optional[List[Dict]] = None) -> str:
+    lines: List[str] = []
+    for turn in (history or [])[-MAX_HISTORY_TURNS:]:
+        role = turn.get("role")
+        text = str(turn.get("text", "")).strip()
+        if not text or role not in {"user", "model"}:
+            continue
+        who = "Nguoi dung" if role == "user" else "Tro ly"
+        lines.append(f"{who}: {text}")
+    lines.append(f"Nguoi dung: {user_text}")
+    return "\n".join(lines)
+
+
+def ask_openai_wrapper(user_text: str, history: Optional[List[Dict]] = None) -> Tuple[bool, str]:
+    """Call wrapper endpoint that expects: {text, system_content} and returns {result}."""
+    if not OPENAI_WRAPPER_ENABLED:
+        return False, "wrapper disabled"
+
+    payload = {
+        "text": _build_wrapper_text(user_text, history),
+        "system_content": SYSTEM_PROMPT,
+    }
+
+    req = request.Request(
+        OPENAI_WRAPPER_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with request.urlopen(req, timeout=25) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        text = str(data.get("result", "")).strip()
+        if not text:
+            return False, "wrapper empty result"
+        return True, text
+    except error.HTTPError as e:
+        detail = e.read().decode("utf-8", errors="ignore")
+        return False, f"wrapper http {e.code}: {detail[:180]}"
+    except Exception as e:
+        return False, f"wrapper call failed: {e}"
+
+
+def ask_gemini(user_text: str, history: Optional[List[Dict]] = None) -> Tuple[bool, str]:
+    if not GEMINI_API_KEY:
+        return False, "gemini key missing"
 def ask_gemini(user_text: str, history: Optional[List[Dict]] = None) -> str:
 def ask_gemini(user_text: str, history: list[dict] | None = None) -> str:
         return "Bạn có thể xem thông tin chính thức tại: https://tuyensinh.ptit.edu.vn/"
@@ -122,6 +185,33 @@ def ask_gemini(user_text: str) -> str:
         candidate = data.get("candidates", [{}])[0]
         parts = candidate.get("content", {}).get("parts", [])
         text = "\n".join(part.get("text", "") for part in parts).strip()
+        if not text:
+            return False, "gemini empty response"
+        return True, text
+    except error.HTTPError as e:
+        detail = e.read().decode("utf-8", errors="ignore")
+        return False, f"gemini http {e.code}: {detail[:180]}"
+    except Exception as e:
+        return False, f"gemini call failed: {e}"
+
+
+def ask_model(user_text: str, history: Optional[List[Dict]] = None) -> str:
+    # 1) Try OpenAI wrapper endpoint first (as requested integration)
+    ok, out = ask_openai_wrapper(user_text, history)
+    if ok:
+        return out
+
+    # 2) Fallback Gemini if configured
+    ok2, out2 = ask_gemini(user_text, history)
+    if ok2:
+        return out2
+
+    # 3) Local safe fallback
+    return fallback_answer(user_text)
+
+
+class AppHandler(SimpleHTTPRequestHandler):
+    def _json(self, status: int, body: Dict) -> None:
         return text or "Minh chua nhan duoc phan hoi day du tu Gemini."
     except error.HTTPError as e:
         detail = e.read().decode("utf-8", errors="ignore")
@@ -177,6 +267,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                 self._json(400, {"error": "message is required"})
                 return
 
+            answer = ask_model(user_text, history)
             answer = ask_gemini(user_text, history)
             answer = ask_gemini(user_text)
             self._json(200, {"reply": answer})
@@ -186,5 +277,7 @@ class AppHandler(SimpleHTTPRequestHandler):
 
 if __name__ == "__main__":
     print(f"Server running at http://{HOST}:{PORT}")
+    print(f"OpenAI wrapper enabled: {OPENAI_WRAPPER_ENABLED} | URL: {OPENAI_WRAPPER_URL}")
+    print(f"Gemini configured: {'yes' if GEMINI_API_KEY else 'no'} | Model: {GEMINI_MODEL}")
     print("Tip: set GEMINI_API_KEY and GEMINI_MODEL before start.")
     ThreadingHTTPServer((HOST, PORT), AppHandler).serve_forever()
