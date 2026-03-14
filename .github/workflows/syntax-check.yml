@@ -1,0 +1,17 @@
+name: Syntax Check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  py-compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Compile critical python files
+        run: |
+          python -m py_compile server.py main.py speech_handler.py audio_handler.py logic_processor.py setup.py
