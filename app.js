@@ -75,6 +75,7 @@ async function getBotReply(message) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message, history: conversationHistory }),
+    body: JSON.stringify({ message }),
   });
 
   if (!res.ok) {
@@ -94,6 +95,7 @@ async function processUserMessage(text) {
   pushHistory("user", cleaned);
 
   addMessage("bot", "Đang suy nghĩ để trả lời tự nhiên hơn...");
+  addMessage("bot", "Đang xử lý câu hỏi...");
 
   try {
     const response = await getBotReply(cleaned);
