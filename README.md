@@ -77,6 +77,39 @@ Mở trình duyệt tại `http://localhost:8080`.
 - Ghi âm bằng Web Speech API (nếu browser hỗ trợ).
 - TTS bằng speechSynthesis (nếu browser hỗ trợ).
 - Tự động failover giữa nhiều nguồn trả lời.
+
+
+## 6) Troubleshooting (Windows SyntaxError)
+
+Neu ban gap loi kieu:
+
+```
+SyntaxError: invalid syntax (server.py, line xx)
+```
+
+lam dung thu tu sau trong PowerShell:
+
+```powershell
+git fetch --all
+git checkout origin/main -- server.py
+python -m py_compile server.py
+python server.py
+```
+
+Neu van loi, kiem tra dung Python 3.10+:
+
+```powershell
+python --version
+```
+
+Va gui output cua:
+
+```powershell
+Get-Content server.py -TotalCount 80
+chcp
+```
+
+De doi ngu de dang xac dinh file local co bi hong encoding hay khong.
 - Backend `server.py` gửi `systemInstruction` + ngữ cảnh cho Gemini để câu trả lời linh hoạt hơn kiểu LLM.
 - Nếu chưa set key hoặc API lỗi, backend fallback trả lời an toàn.
 
