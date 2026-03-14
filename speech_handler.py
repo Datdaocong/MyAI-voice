@@ -1,37 +1,68 @@
-import speech_recognition as sr
+from __future__ import annotations
 
-def record_and_recognize():
-    """
-    Sử dụng mic của máy tính để ghi âm và Google STT để lấy văn bản.
-    Nhận diện bằng Tiếng Việt ('vi-VN').
-    """
-    r = sr.Recognizer()
-    
-    # Thiết lập cấu hình mic (chỉnh tuỳ môi trường chạy)
-    with sr.Microphone() as source:
-        print("Đang điều chỉnh nhiễu nền...")
-        r.adjust_for_ambient_noise(source, duration=1)
-        
-        print("Bắt đầu nghe...")
-        try:
-            # Lắng nghe âm thanh từ mic. Timeout sau 5 giây nếu không ai nói. 
-            # Dừng ghi âm khi kết thúc câu (phrase_time_limit)
-            audio = r.listen(source, timeout=5, phrase_time_limit=10)
-            print("Đã nghe xong. Đang xử lý...")
-            
-            # Chú ý: dùng recognizer_google cần có Internet
-            text = r.recognize_google(audio, language="vi-VN")
-            return text
-            
-        except sr.WaitTimeoutError:
-            print("Không nghe thấy gì (Timeout).")
-            return "[Lỗi: Hết thời gian ghi âm vì không nghe thấy gì rấy]"
-        except sr.UnknownValueError:
-            print("Google Speech Recognition không thể nhận diện được audio")
-            return "[Lỗi: Xin lỗi, tôi không nghe rõ câu đó.]"
-        except sr.RequestError as e:
-            print(f"Không thể gọi dịch vụ Google Speech Recognition; {e}")
-            return f"[Lỗi mạng: Không thể kết nối API Google]"
-        except Exception as e:
-            print(f"Lỗi: {e}")
-            return f"[Lỗi hệ thống: {e}]"
+from io import BytesIO
+
+try:
+    import speech_recognition as sr
+except Exception:
+    sr = None
+
+
+def speech_available() -> bool:
+    return sr is not None
+
+
+def microphone_supported() -> bool:
+    """Return True when microphone access is available in runtime."""
+    if not speech_available():
+        return False
+    try:
+        with sr.Microphone() as source:
+            _ = source
+        return True
+    except Exception:
+        return False
+
+
+def record_and_recognize(timeout: int = 5, phrase_time_limit: int = 10):
+    """Use local microphone + Google STT to recognize Vietnamese speech."""
+    if not speech_available():
+        return "[Lỗi: Chưa cài SpeechRecognition/PyAudio. Hãy dùng nhập văn bản hoặc cài requirements-voice.txt]"
+
+    recognizer = sr.Recognizer()
+
+    try:
+        with sr.Microphone() as source:
+            recognizer.adjust_for_ambient_noise(source, duration=1)
+            audio = recognizer.listen(source, timeout=timeout, phrase_time_limit=phrase_time_limit)
+
+        return recognizer.recognize_google(audio, language="vi-VN")
+
+    except sr.WaitTimeoutError:
+        return "[Lỗi: Hết thời gian ghi âm vì không nghe thấy gì.]"
+    except sr.UnknownValueError:
+        return "[Lỗi: Xin lỗi, tôi không nghe rõ câu đó.]"
+    except sr.RequestError:
+        return "[Lỗi mạng: Không thể kết nối API Google Speech Recognition.]"
+    except OSError:
+        return "[Lỗi: Không tìm thấy micro. Hãy dùng tab nhập văn bản hoặc tải file audio.]"
+    except Exception as e:
+        return f"[Lỗi hệ thống: {e}]"
+
+
+def transcribe_uploaded_audio(file_bytes: bytes):
+    """Recognize Vietnamese speech from uploaded WAV/AIFF/FLAC audio bytes."""
+    if not speech_available():
+        return "[Lỗi: Chưa cài SpeechRecognition. Hãy dùng tab nhập văn bản hoặc cài requirements-audio.txt]"
+
+    recognizer = sr.Recognizer()
+    try:
+        with sr.AudioFile(BytesIO(file_bytes)) as source:
+            audio = recognizer.record(source)
+        return recognizer.recognize_google(audio, language="vi-VN")
+    except sr.UnknownValueError:
+        return "[Lỗi: Không nhận diện được nội dung trong file audio.]"
+    except sr.RequestError:
+        return "[Lỗi mạng: Không thể kết nối API Google Speech Recognition.]"
+    except Exception as e:
+        return f"[Lỗi: File audio chưa đúng định dạng hỗ trợ (WAV/AIFF/FLAC). Chi tiết: {e}]"
