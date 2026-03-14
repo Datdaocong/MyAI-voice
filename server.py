@@ -21,6 +21,18 @@ SYSTEM_PROMPT = (
     "Neu cau hoi lien quan tuyen sinh/PTIT, hay nhac nguon chinh thuc: "
     "https://tuyensinh.ptit.edu.vn/. "
     "Neu chua chac chan, hay noi ro muc do chac chan thay vi bia thong tin."
+SYSTEM_PROMPT = (
+    "Bạn là trợ lý AI tiếng Việt, trả lời linh hoạt như các LLM hiện đại. "
+    "Ưu tiên giọng điệu tự nhiên, rõ ràng, có cấu trúc, đi thẳng vào nhu cầu người dùng. "
+    "Khi phù hợp, đưa ví dụ ngắn hoặc checklist dễ làm theo. "
+    "Nếu câu hỏi liên quan tuyển sinh/PTIT, cung cấp thông tin thực tế và nhắc nguồn chính thức: "
+    "https://tuyensinh.ptit.edu.vn/. "
+    "Nếu chưa chắc chắn, nói rõ mức độ chắc chắn thay vì bịa."
+
+SYSTEM_PROMPT = (
+    "Bạn là trợ lý tư vấn tuyển sinh PTIT. "
+    "Trả lời ngắn gọn, rõ ràng, dùng tiếng Việt tự nhiên. "
+    "Nếu không chắc, hãy nói rõ và gợi ý link chính thức."
 )
 
 
@@ -39,6 +51,19 @@ def fallback_answer(user_text: str) -> str:
 
 def _build_contents(user_text: str, history: List[Dict]) -> List[Dict]:
     contents: List[Dict] = []
+    if any(k in lower for k in ["tuyển sinh", "xét tuyển", "ptit", "aiot"]):
+        return (
+            "Mình gợi ý bạn xem nguồn chính thức tại https://tuyensinh.ptit.edu.vn/. "
+            "Nếu bạn cho mình biết ngành/điểm/khu vực, mình sẽ tư vấn chi tiết hơn theo từng bước."
+        )
+    return (
+        "Mình đã nhận câu hỏi. Bạn có thể nói rõ mục tiêu hơn (ví dụ: muốn lộ trình học, "
+        "tư vấn ngành, hay so sánh lựa chọn) để mình trả lời sát như trợ lý AI cá nhân."
+    )
+
+
+def _build_contents(user_text: str, history: list[dict]) -> list[dict]:
+    contents: list[dict] = []
 
     compact_history = history[-MAX_HISTORY_TURNS:]
     for turn in compact_history:
@@ -55,6 +80,12 @@ def _build_contents(user_text: str, history: List[Dict]) -> List[Dict]:
 
 
 def ask_gemini(user_text: str, history: Optional[List[Dict]] = None) -> str:
+def ask_gemini(user_text: str, history: list[dict] | None = None) -> str:
+        return "Bạn có thể xem thông tin chính thức tại: https://tuyensinh.ptit.edu.vn/"
+    return "Mình đã ghi nhận câu hỏi của bạn. Bạn có thể hỏi cụ thể hơn về tuyển sinh PTIT để mình hỗ trợ tốt hơn."
+
+
+def ask_gemini(user_text: str) -> str:
     if not GEMINI_API_KEY:
         return fallback_answer(user_text)
 
@@ -72,6 +103,9 @@ def ask_gemini(user_text: str, history: Optional[List[Dict]] = None) -> str:
             "topK": 40,
             "maxOutputTokens": 1024,
         },
+    payload = {
+        "contents": [{"parts": [{"text": f"{SYSTEM_PROMPT}\n\nCâu hỏi: {user_text}"}]}],
+        "generationConfig": {"temperature": 0.4, "maxOutputTokens": 512},
     }
 
     req = request.Request(
@@ -98,6 +132,24 @@ def ask_gemini(user_text: str, history: Optional[List[Dict]] = None) -> str:
 
 class AppHandler(SimpleHTTPRequestHandler):
     def _json(self, status: int, body: Dict) -> None:
+        return text or "Mình chưa nhận được phản hồi đầy đủ từ Gemini."
+        with request.urlopen(req, timeout=20) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        return (
+            data.get("candidates", [{}])[0]
+            .get("content", {})
+            .get("parts", [{}])[0]
+            .get("text", "Mình chưa nhận được phản hồi từ Gemini.")
+        )
+    except error.HTTPError as e:
+        detail = e.read().decode("utf-8", errors="ignore")
+        return f"Gemini API lỗi HTTP {e.code}. Chi tiết: {detail[:300]}"
+    except Exception as e:
+        return f"Không gọi được Gemini API: {e}"
+
+
+class AppHandler(SimpleHTTPRequestHandler):
+    def _json(self, status: int, body: dict) -> None:
         content = json.dumps(body, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -120,11 +172,13 @@ class AppHandler(SimpleHTTPRequestHandler):
             if not isinstance(history, list):
                 history = []
 
+            user_text = str(body.get("message", "")).strip()
             if not user_text:
                 self._json(400, {"error": "message is required"})
                 return
 
             answer = ask_gemini(user_text, history)
+            answer = ask_gemini(user_text)
             self._json(200, {"reply": answer})
         except Exception as e:
             self._json(500, {"error": str(e)})
