@@ -9,6 +9,7 @@ const ttsStatus = document.getElementById("ttsStatus");
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const speechAvailable = Boolean(SpeechRecognition);
 const ttsAvailable = "speechSynthesis" in window;
+const conversationHistory = [];
 
 speechStatus.textContent = `Speech-to-Text: ${speechAvailable ? "✅ Sẵn sàng" : "❌ Không hỗ trợ trên trình duyệt này"}`;
 ttsStatus.textContent = `Text-to-Speech: ${ttsAvailable ? "✅ Sẵn sàng" : "❌ Không hỗ trợ trên trình duyệt này"}`;
@@ -62,10 +63,18 @@ function addMessage(role, text, sentiment = null) {
   chat.prepend(div);
 }
 
+function pushHistory(role, text) {
+  conversationHistory.push({ role, text });
+  if (conversationHistory.length > 20) {
+    conversationHistory.shift();
+  }
+}
+
 async function getBotReply(message) {
   const res = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, history: conversationHistory }),
     body: JSON.stringify({ message }),
   });
 
@@ -83,11 +92,16 @@ async function processUserMessage(text) {
   if (!cleaned) return;
 
   addMessage("user", cleaned);
+  pushHistory("user", cleaned);
+
+  addMessage("bot", "Đang suy nghĩ để trả lời tự nhiên hơn...");
   addMessage("bot", "Đang xử lý câu hỏi...");
 
   try {
     const response = await getBotReply(cleaned);
     chat.removeChild(chat.firstChild);
+    pushHistory("model", response);
+
     const sentiment = analyzeSentiment(cleaned);
     addMessage("bot", response, sentiment);
     speakText(response);

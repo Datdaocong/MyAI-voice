@@ -1,5 +1,6 @@
 # MyAI Voice (HTML/CSS/JS + Gemini)
 
+Bản này chạy bằng web tĩnh + backend Python nhẹ để gọi Gemini API ở phía server (không lộ key ra trình duyệt).
 Bản này chạy bằng web tĩnh + 1 server Python nhẹ để gọi Gemini API ở phía backend (không lộ key ra trình duyệt).
 
 ## 1) Update code trên máy của bạn
@@ -14,12 +15,18 @@ git pull
 ```bash
 export GEMINI_API_KEY="YOUR_GEMINI_API_KEY"
 export GEMINI_MODEL="gemini-1.5-flash"
+# Tuỳ chọn: số lượt hội thoại gửi kèm ngữ cảnh
+export MAX_HISTORY_TURNS="8"
 ```
 
 ### Windows PowerShell
 ```powershell
 $env:GEMINI_API_KEY="YOUR_GEMINI_API_KEY"
 $env:GEMINI_MODEL="gemini-1.5-flash"
+$env:MAX_HISTORY_TURNS="8"
+```
+
+> ⚠️ Nếu từng lộ API key công khai, hãy rotate/revoke key cũ và tạo key mới.
 ```
 
 > ⚠️ Bạn vừa gửi API key công khai trong chat. Nên vào Google AI Studio để **rotate/revoke key cũ** và tạo key mới ngay.
@@ -35,6 +42,12 @@ Mở trình duyệt tại `http://localhost:8080`.
 ## 4) Cách hoạt động
 
 - Frontend: `index.html`, `styles.css`, `app.js`.
+- Frontend gọi `POST /api/chat` và gửi cả lịch sử hội thoại gần nhất.
+- Backend `server.py` gửi `systemInstruction` + ngữ cảnh cho Gemini để câu trả lời linh hoạt hơn kiểu LLM.
+- Nếu chưa set key hoặc API lỗi, backend fallback trả lời an toàn.
+
+## 5) Tính năng
+- Chat text + ngữ cảnh nhiều lượt.
 - Frontend gọi `POST /api/chat`.
 - Backend `server.py` gọi Gemini API bằng `GEMINI_API_KEY` trong biến môi trường.
 - Nếu chưa set key hoặc API lỗi, backend fallback trả lời theo rule tuyển sinh PTIT.
