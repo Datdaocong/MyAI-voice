@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MyAI Voice - Web Assistant</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar">
+        <h1>🎙️ Trợ lý ảo AI Cá Nhân</h1>
+        <p>Phiên bản HTML/CSS/JS thuần, chạy trực tiếp trên trình duyệt.</p>
+      </header>
+
+      <section class="status" id="statusBox">
+        <span id="speechStatus">Speech-to-Text: đang kiểm tra...</span>
+        <span id="ttsStatus">Text-to-Speech: đang kiểm tra...</span>
+      </section>
+
+      <section class="actions">
+        <button id="voiceBtn" class="primary">🎤 Bắt đầu ghi âm</button>
+        <button id="stopBtn">⏹️ Dừng ghi âm</button>
+      </section>
+
+      <section class="text-input">
+        <textarea id="userInput" placeholder="Nhập câu hỏi... ví dụ: tuyển sinh PTIT"></textarea>
+        <button id="sendBtn" class="primary">Gửi câu hỏi</button>
+      </section>
+
+      <section id="chat" class="chat" aria-live="polite"></section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
