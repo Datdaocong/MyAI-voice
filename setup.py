@@ -1,4 +1,8 @@
-import os
+"""Project bootstrap helpers."""
 
-# Create audio temp folder if not exists
-os.makedirs("temp_audio", exist_ok=True)
+from pathlib import Path
+
+
+if __name__ == "__main__":
+    Path("temp_audio").mkdir(exist_ok=True)
+    print("Created temp_audio directory.")
