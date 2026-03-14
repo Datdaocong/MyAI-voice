@@ -1,6 +1,7 @@
 # MyAI Voice (HTML/CSS/JS + Gemini)
 
 Bản này chạy bằng web tĩnh + backend Python nhẹ để gọi Gemini API ở phía server (không lộ key ra trình duyệt).
+Bản này chạy bằng web tĩnh + 1 server Python nhẹ để gọi Gemini API ở phía backend (không lộ key ra trình duyệt).
 
 ## 1) Update code trên máy của bạn
 
@@ -26,6 +27,9 @@ $env:MAX_HISTORY_TURNS="8"
 ```
 
 > ⚠️ Nếu từng lộ API key công khai, hãy rotate/revoke key cũ và tạo key mới.
+```
+
+> ⚠️ Bạn vừa gửi API key công khai trong chat. Nên vào Google AI Studio để **rotate/revoke key cũ** và tạo key mới ngay.
 
 ## 3) Chạy app
 
@@ -44,6 +48,12 @@ Mở trình duyệt tại `http://localhost:8080`.
 
 ## 5) Tính năng
 - Chat text + ngữ cảnh nhiều lượt.
+- Frontend gọi `POST /api/chat`.
+- Backend `server.py` gọi Gemini API bằng `GEMINI_API_KEY` trong biến môi trường.
+- Nếu chưa set key hoặc API lỗi, backend fallback trả lời theo rule tuyển sinh PTIT.
+
+## 5) Tính năng
+- Chat text.
 - Ghi âm bằng Web Speech API (nếu browser hỗ trợ).
 - TTS bằng speechSynthesis (nếu browser hỗ trợ).
 - Trả lời bằng Gemini qua backend local.

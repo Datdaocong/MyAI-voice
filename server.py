@@ -18,6 +18,11 @@ SYSTEM_PROMPT = (
     "Nếu câu hỏi liên quan tuyển sinh/PTIT, cung cấp thông tin thực tế và nhắc nguồn chính thức: "
     "https://tuyensinh.ptit.edu.vn/. "
     "Nếu chưa chắc chắn, nói rõ mức độ chắc chắn thay vì bịa."
+
+SYSTEM_PROMPT = (
+    "Bạn là trợ lý tư vấn tuyển sinh PTIT. "
+    "Trả lời ngắn gọn, rõ ràng, dùng tiếng Việt tự nhiên. "
+    "Nếu không chắc, hãy nói rõ và gợi ý link chính thức."
 )
 
 
@@ -52,6 +57,11 @@ def _build_contents(user_text: str, history: list[dict]) -> list[dict]:
 
 
 def ask_gemini(user_text: str, history: list[dict] | None = None) -> str:
+        return "Bạn có thể xem thông tin chính thức tại: https://tuyensinh.ptit.edu.vn/"
+    return "Mình đã ghi nhận câu hỏi của bạn. Bạn có thể hỏi cụ thể hơn về tuyển sinh PTIT để mình hỗ trợ tốt hơn."
+
+
+def ask_gemini(user_text: str) -> str:
     if not GEMINI_API_KEY:
         return fallback_answer(user_text)
 
@@ -69,6 +79,9 @@ def ask_gemini(user_text: str, history: list[dict] | None = None) -> str:
             "topK": 40,
             "maxOutputTokens": 1024,
         },
+    payload = {
+        "contents": [{"parts": [{"text": f"{SYSTEM_PROMPT}\n\nCâu hỏi: {user_text}"}]}],
+        "generationConfig": {"temperature": 0.4, "maxOutputTokens": 512},
     }
 
     req = request.Request(
@@ -86,6 +99,14 @@ def ask_gemini(user_text: str, history: list[dict] | None = None) -> str:
         parts = candidate.get("content", {}).get("parts", [])
         text = "\n".join(part.get("text", "") for part in parts).strip()
         return text or "Mình chưa nhận được phản hồi đầy đủ từ Gemini."
+        with request.urlopen(req, timeout=20) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        return (
+            data.get("candidates", [{}])[0]
+            .get("content", {})
+            .get("parts", [{}])[0]
+            .get("text", "Mình chưa nhận được phản hồi từ Gemini.")
+        )
     except error.HTTPError as e:
         detail = e.read().decode("utf-8", errors="ignore")
         return f"Gemini API lỗi HTTP {e.code}. Chi tiết: {detail[:300]}"
@@ -117,11 +138,13 @@ class AppHandler(SimpleHTTPRequestHandler):
             if not isinstance(history, list):
                 history = []
 
+            user_text = str(body.get("message", "")).strip()
             if not user_text:
                 self._json(400, {"error": "message is required"})
                 return
 
             answer = ask_gemini(user_text, history)
+            answer = ask_gemini(user_text)
             self._json(200, {"reply": answer})
         except Exception as e:
             self._json(500, {"error": str(e)})
