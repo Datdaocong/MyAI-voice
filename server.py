@@ -54,6 +54,7 @@ SYSTEM_PROMPT = (
 
 def fallback_answer(user_text: str) -> str:
     lower = user_text.lower()
+    if any(k in lower for k in ["tuyen sinh", "xet tuyen", "ptit", "aiot"]):
     if any(k in lower for k in ["tuyen sinh", "xet tuyen", "ptit", "aiot", "tuyển sinh", "xét tuyển"]):
         return (
             "Ban co the xem nguon chinh thuc tai https://tuyensinh.ptit.edu.vn/. "
