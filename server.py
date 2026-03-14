@@ -1,8 +1,10 @@
+# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 import json
 import os
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from typing import Dict, List, Optional
 from urllib import error, request
 
 HOST = "0.0.0.0"
@@ -11,6 +13,14 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 MAX_HISTORY_TURNS = int(os.getenv("MAX_HISTORY_TURNS", "8"))
 
+# Keep prompt ASCII-only to avoid any Windows encoding/editor corruption issues.
+SYSTEM_PROMPT = (
+    "Ban la tro ly AI tieng Viet, tra loi linh hoat nhu cac LLM hien dai. "
+    "Uu tien giong dieu tu nhien, ro rang, co cau truc, di thang vao nhu cau nguoi dung. "
+    "Khi phu hop, dua vi du ngan hoac checklist de lam theo. "
+    "Neu cau hoi lien quan tuyen sinh/PTIT, hay nhac nguon chinh thuc: "
+    "https://tuyensinh.ptit.edu.vn/. "
+    "Neu chua chac chan, hay noi ro muc do chac chan thay vi bia thong tin."
 SYSTEM_PROMPT = (
     "Bạn là trợ lý AI tiếng Việt, trả lời linh hoạt như các LLM hiện đại. "
     "Ưu tiên giọng điệu tự nhiên, rõ ràng, có cấu trúc, đi thẳng vào nhu cầu người dùng. "
@@ -28,6 +38,19 @@ SYSTEM_PROMPT = (
 
 def fallback_answer(user_text: str) -> str:
     lower = user_text.lower()
+    if any(k in lower for k in ["tuyen sinh", "xet tuyen", "ptit", "aiot", "tuyển sinh", "xét tuyển"]):
+        return (
+            "Ban co the xem nguon chinh thuc tai https://tuyensinh.ptit.edu.vn/. "
+            "Neu ban cho minh biet nganh/diem/khu vuc, minh se tu van chi tiet hon theo tung buoc."
+        )
+    return (
+        "Minh da nhan cau hoi. Ban co the noi ro muc tieu hon (vi du: lo trinh hoc, "
+        "tu van nganh, hay so sanh lua chon) de minh tra loi sat hon."
+    )
+
+
+def _build_contents(user_text: str, history: List[Dict]) -> List[Dict]:
+    contents: List[Dict] = []
     if any(k in lower for k in ["tuyển sinh", "xét tuyển", "ptit", "aiot"]):
         return (
             "Mình gợi ý bạn xem nguồn chính thức tại https://tuyensinh.ptit.edu.vn/. "
@@ -56,6 +79,7 @@ def _build_contents(user_text: str, history: list[dict]) -> list[dict]:
     return contents
 
 
+def ask_gemini(user_text: str, history: Optional[List[Dict]] = None) -> str:
 def ask_gemini(user_text: str, history: list[dict] | None = None) -> str:
         return "Bạn có thể xem thông tin chính thức tại: https://tuyensinh.ptit.edu.vn/"
     return "Mình đã ghi nhận câu hỏi của bạn. Bạn có thể hỏi cụ thể hơn về tuyển sinh PTIT để mình hỗ trợ tốt hơn."
@@ -98,6 +122,16 @@ def ask_gemini(user_text: str) -> str:
         candidate = data.get("candidates", [{}])[0]
         parts = candidate.get("content", {}).get("parts", [])
         text = "\n".join(part.get("text", "") for part in parts).strip()
+        return text or "Minh chua nhan duoc phan hoi day du tu Gemini."
+    except error.HTTPError as e:
+        detail = e.read().decode("utf-8", errors="ignore")
+        return f"Gemini API loi HTTP {e.code}. Chi tiet: {detail[:300]}"
+    except Exception as e:
+        return f"Khong goi duoc Gemini API: {e}"
+
+
+class AppHandler(SimpleHTTPRequestHandler):
+    def _json(self, status: int, body: Dict) -> None:
         return text or "Mình chưa nhận được phản hồi đầy đủ từ Gemini."
         with request.urlopen(req, timeout=20) as resp:
             data = json.loads(resp.read().decode("utf-8"))
